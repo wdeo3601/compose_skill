@@ -255,12 +255,21 @@ If `COMPOSE-AUDIT-REPORT.md` already exists at that path, do not overwrite it si
 
 ### 9. Return A Short Summary
 
-In chat, summarize:
+In chat, produce a summary that mirrors the report's `Prioritized Fixes` section — not a generic recap. The developer should be able to act on the summary alone without opening the report file.
 
-- overall score
-- one-line judgment for each category
-- the three most important fixes
+Include:
+
+- overall score (and the delta vs. any prior `COMPOSE-AUDIT-REPORT*.md` at the same path, if present)
+- one-line judgment for each category, with the applied ceiling if any (e.g. "Performance 6/10 — capped by 79% skippability")
+- compiler-report highlights when Step 4 succeeded: Strong Skipping on/off, `skippable%`, count of unstable shared types, any module that failed to build
+- **top three actionable fixes**, each with:
+  - the concrete change ("add `key = { it.id }` to `items(...)` in `feed/FeedList.kt:42`")
+  - file path(s) and line numbers — the same ones listed in the report's Prioritized Fixes
+  - one official doc URL from `references/canonical-sources.md`
+  - expected impact ("unlocks skipping for `FeedItem`, should move `skippable%` from 79% → ~90%")
 - whether a `material-3` audit is worth running next
+
+The top-three fixes in the chat summary MUST be the same items as the report's `Prioritized Fixes` list (same file paths, same doc links). Do not add generic advice in chat that isn't in the written report.
 
 ## Evidence Rules
 
