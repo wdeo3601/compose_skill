@@ -1,12 +1,52 @@
 # Jetpack Compose Audit Skill
 
-**Version 1.1 · released 2026-04-21**
+**Version 1.1.1 · released 2026-04-21**
 
 > Find out where your Compose app is burning frames, by how much, and what to change to win them back — measured against real compiler data, not vibes.
 
 A strict, evidence-based audit for Android Jetpack Compose repositories. Point it at a repo, let it run the build once, and get back a 0-100 score, a 0-10 score per category, an actionable top-three fix list, and a full Markdown report with every deduction cited against an official `developer.android.com` page.
 
 Built for Claude Code, Cursor, and any agent that loads the Anthropic skill format.
+
+---
+
+## Changelog
+
+### 1.1.1 — 2026-04-21
+
+**Refined — Strong Skipping-aware scoring, detection, and reporting.**
+
+This is a corrective follow-up to `1.1`. After feedback around Strong Skipping Mode, the skill now evaluates modern Compose repos the way the compiler actually behaves on Kotlin `2.0.20+` / Compose Compiler `1.5.4+`.
+
+- **Performance rubric**: split the measured-ceiling logic into explicit **SSM-off** and **SSM-on** paths. On older compiler tracks, ceilings still depend on `skippable%` and unstable shared params. Under Strong Skipping, the audit no longer blindly caps scores because a repo uses raw `List` params or misses `@Stable` on its own.
+- **What now matters under SSM**: the audit now looks for the issues that still materially defeat skipping in practice: per-recomposition param churn (`listOf(...)`, `mapOf(...)`, fresh UI models, object / lambda literals in composable bodies), expensive or broken `equals()` on unstable params, and unjustified `@NonSkippableComposable` / `@DontMemoize` opt-outs on hot paths.
+- **More honest compiler interpretation**: the docs now explicitly distinguish module-wide `skippable%` from **named-only `skippable%`**, because zero-argument lambdas can artificially drag down the raw module number. Reports are instructed to say which metric actually bound the ceiling.
+- **Collection guidance corrected**: `ImmutableList` / `PersistentList` are no longer framed as a mandatory cargo-cult fix under Strong Skipping. They still earn credit, but for the right reasons: structural sharing, predictable equality, and lower churn when collections are reused deliberately.
+- **Search playbook**: the Strong Skipping section now tells the agent exactly how to detect explicit opt-ins / opt-outs, when **not** to deduct for raw `List` params or missing `@Stable`, and what to inspect instead when SSM is active.
+- **Diagnostics**: Strong Skipping is now resolved **per module**, not assumed once for the whole repo. The diagnostics docs cover default-on, explicit opt-out, older-version opt-in, and mixed-module repos where different modules may require different ceiling tables.
+- **Report template**: added a mandatory **Performance ceiling check** block so every report records Strong Skipping status, the table applied, module-wide vs named-only `skippable%`, unstable shared-type count, the actual binding cap, and the final applied score.
+- **Chat summary guidance**: the short final summary now mirrors the same SSM-aware framing as the report. Under SSM, expected impact is described in terms of removing churn, fixing `equals()`, or clearing the binding cap rather than promising a magic `skippable%` jump.
+- **README examples and docs**: refreshed the public-facing example output to show a realistic SSM-era case: Strong Skipping on, high named-only skippability, and a score capped by recreated params rather than by the raw module-wide percentage.
+
+**Net effect:** fewer false positives on modern Compose codebases, fewer cargo-cult recommendations, and more defensible audit reports when the repo already runs with Strong Skipping enabled by default.
+
+### 1.1 — 2026-04-21
+
+**Added — animation auditing.**
+
+- **Performance**: new rules for animation phase correctness. Flags animated `.value` reads piped into state-reading modifiers (`Modifier.offset(x.dp)`, `Modifier.alpha(a)`) when lambda-form modifiers (`Modifier.graphicsLayer { ... }`, `Modifier.offset { ... }`) would defer to layout/draw. Flags `Animatable(...)` created in a composable body without `remember { ... }` or hoisting. Flags `rememberInfiniteTransition()` hosted in composables that stay composed offscreen. Adds API-choice guidance for `Crossfade` vs `AnimatedContent`: standard fades remain fine with `Crossfade`, while custom enter/exit or size-aware swaps belong in `AnimatedContent`.
+- **Side effects**: new rules for animation driving. Flags `Animatable` animations launched from the composition body. Flags `rememberCoroutineScope().launch { animatable.animateTo(...) }` when the animation is target-driven and `LaunchedEffect(target)` is the clearer fit.
+- **Composable API quality**: new rules for reusable animated components. Encourages exposing `animationSpec: AnimationSpec<T>` on shared animated APIs when callers may reasonably need timing control. Treats missing `label` parameters on tooling-visible shared animations as a light tooling-quality smell rather than a hard failure.
+- **Search playbook**: dedicated "Animation Phase-Smell Heuristic" section and new grep patterns for animation APIs.
+- **Canonical sources**: added the Compose Animation docs (`animation/introduction`, `animation/value-based`, `animation/customize`) to the URL ledger every deduction must cite.
+
+### 1.0 — initial release
+
+- Four scoring categories: Performance (35%), State management (25%), Side effects (20%), Composable API quality (20%).
+- Automatic Compose Compiler reports via a bundled Gradle init script (`scripts/compose-reports.init.gradle`).
+- Measured `skippable%` ceilings on the Performance score.
+- Every deduction cited against `developer.android.com` or the AndroidX component guidelines.
+- Mirrored chat summary and written `COMPOSE-AUDIT-REPORT.md` with prioritized fixes.
 
 ---
 
@@ -156,46 +196,6 @@ Top 3 fixes
 - Compose Multiplatform (`expect`/`actual`, target-specific code paths).
 - Wear OS / TV / Auto / Glance surfaces.
 - Build performance (incremental compilation, KSP/KAPT choice).
-
----
-
-## Changelog
-
-### 1.1.1 — 2026-04-21
-
-**Refined — Strong Skipping-aware scoring, detection, and reporting.**
-
-This is a corrective follow-up to `1.1`. After feedback around Strong Skipping Mode, the skill now evaluates modern Compose repos the way the compiler actually behaves on Kotlin `2.0.20+` / Compose Compiler `1.5.4+`.
-
-- **Performance rubric**: split the measured-ceiling logic into explicit **SSM-off** and **SSM-on** paths. On older compiler tracks, ceilings still depend on `skippable%` and unstable shared params. Under Strong Skipping, the audit no longer blindly caps scores because a repo uses raw `List` params or misses `@Stable` on its own.
-- **What now matters under SSM**: the audit now looks for the issues that still materially defeat skipping in practice: per-recomposition param churn (`listOf(...)`, `mapOf(...)`, fresh UI models, object / lambda literals in composable bodies), expensive or broken `equals()` on unstable params, and unjustified `@NonSkippableComposable` / `@DontMemoize` opt-outs on hot paths.
-- **More honest compiler interpretation**: the docs now explicitly distinguish module-wide `skippable%` from **named-only `skippable%`**, because zero-argument lambdas can artificially drag down the raw module number. Reports are instructed to say which metric actually bound the ceiling.
-- **Collection guidance corrected**: `ImmutableList` / `PersistentList` are no longer framed as a mandatory cargo-cult fix under Strong Skipping. They still earn credit, but for the right reasons: structural sharing, predictable equality, and lower churn when collections are reused deliberately.
-- **Search playbook**: the Strong Skipping section now tells the agent exactly how to detect explicit opt-ins / opt-outs, when **not** to deduct for raw `List` params or missing `@Stable`, and what to inspect instead when SSM is active.
-- **Diagnostics**: Strong Skipping is now resolved **per module**, not assumed once for the whole repo. The diagnostics docs cover default-on, explicit opt-out, older-version opt-in, and mixed-module repos where different modules may require different ceiling tables.
-- **Report template**: added a mandatory **Performance ceiling check** block so every report records Strong Skipping status, the table applied, module-wide vs named-only `skippable%`, unstable shared-type count, the actual binding cap, and the final applied score.
-- **Chat summary guidance**: the short final summary now mirrors the same SSM-aware framing as the report. Under SSM, expected impact is described in terms of removing churn, fixing `equals()`, or clearing the binding cap rather than promising a magic `skippable%` jump.
-- **README examples and docs**: refreshed the public-facing example output to show a realistic SSM-era case: Strong Skipping on, high named-only skippability, and a score capped by recreated params rather than by the raw module-wide percentage.
-
-**Net effect:** fewer false positives on modern Compose codebases, fewer cargo-cult recommendations, and more defensible audit reports when the repo already runs with Strong Skipping enabled by default.
-
-### 1.1 — 2026-04-21
-
-**Added — animation auditing.**
-
-- **Performance**: new rules for animation phase correctness. Flags animated `.value` reads piped into state-reading modifiers (`Modifier.offset(x.dp)`, `Modifier.alpha(a)`) when lambda-form modifiers (`Modifier.graphicsLayer { ... }`, `Modifier.offset { ... }`) would defer to layout/draw. Flags `Animatable(...)` created in a composable body without `remember { ... }` or hoisting. Flags `rememberInfiniteTransition()` hosted in composables that stay composed offscreen. Adds API-choice guidance for `Crossfade` vs `AnimatedContent`: standard fades remain fine with `Crossfade`, while custom enter/exit or size-aware swaps belong in `AnimatedContent`.
-- **Side effects**: new rules for animation driving. Flags `Animatable` animations launched from the composition body. Flags `rememberCoroutineScope().launch { animatable.animateTo(...) }` when the animation is target-driven and `LaunchedEffect(target)` is the clearer fit.
-- **Composable API quality**: new rules for reusable animated components. Encourages exposing `animationSpec: AnimationSpec<T>` on shared animated APIs when callers may reasonably need timing control. Treats missing `label` parameters on tooling-visible shared animations as a light tooling-quality smell rather than a hard failure.
-- **Search playbook**: dedicated "Animation Phase-Smell Heuristic" section and new grep patterns for animation APIs.
-- **Canonical sources**: added the Compose Animation docs (`animation/introduction`, `animation/value-based`, `animation/customize`) to the URL ledger every deduction must cite.
-
-### 1.0 — initial release
-
-- Four scoring categories: Performance (35%), State management (25%), Side effects (20%), Composable API quality (20%).
-- Automatic Compose Compiler reports via a bundled Gradle init script (`scripts/compose-reports.init.gradle`).
-- Measured `skippable%` ceilings on the Performance score.
-- Every deduction cited against `developer.android.com` or the AndroidX component guidelines.
-- Mirrored chat summary and written `COMPOSE-AUDIT-REPORT.md` with prioritized fixes.
 
 ---
 
