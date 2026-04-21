@@ -148,7 +148,7 @@ Positive signals to reward:
 Confirm the project's compiler version:
 
 - `rg -n 'kotlin\s*=\s*"' -g '*.toml'` and `rg -n 'org\.jetbrains\.kotlin' -g '*.gradle*'` to find the Kotlin version
-- Strong Skipping is on by default at Kotlin **2.0.20+**; below that, stability inference matters more and unstable params more aggressively block skipping
+- Strong Skipping is on by default at Kotlin **2.0.20+**; below that, stability inference matters more and unstable params more aggressively block skipping. With Strong Skipping ON, optimizations like wrapping `List` in `@Stable` classes, using `ImmutableList`, or wrapping lambdas in `remember { ... }` are generally unnecessary unless the instances are actively re-allocated on recomposition. Do not deduct for raw `List` parameters or missing `@Stable` annotations if Strong Skipping is active, unless you observe instance-recreation churn.
 
 ## 4. State Management Checks
 

@@ -78,7 +78,7 @@ Reward:
 - deferred reads via lambda modifiers (`Modifier.offset { … }`, `Modifier.graphicsLayer { … }`, `Modifier.drawBehind { … }`) → [docs](https://developer.android.com/develop/ui/compose/performance/bestpractices), [phases](https://developer.android.com/develop/ui/compose/performance/phases)
 - absence of backwards writes (writing to state that has already been read in the same composition) → [docs](https://developer.android.com/develop/ui/compose/performance/bestpractices)
 - stability hygiene: `@Stable` / `@Immutable` on data classes used as composable params → [docs](https://developer.android.com/develop/ui/compose/performance/stability)
-- `kotlinx.collections.immutable` (`ImmutableList`, `PersistentList`) for collection params → [stability](https://developer.android.com/develop/ui/compose/performance/stability), [fix](https://developer.android.com/develop/ui/compose/performance/stability/fix)
+- `kotlinx.collections.immutable` (`ImmutableList`, `PersistentList`) for collection params (when Strong Skipping is disabled, or to prevent re-instantiation churn when enabled) → [stability](https://developer.android.com/develop/ui/compose/performance/stability), [fix](https://developer.android.com/develop/ui/compose/performance/stability/fix)
 - `compose_compiler_config.conf` used to mark third-party types stable → [fix](https://developer.android.com/develop/ui/compose/performance/stability/fix)
 - typed state factories (`mutableIntStateOf`, `mutableLongStateOf`, `mutableFloatStateOf`, `mutableDoubleStateOf`) for primitives instead of boxed `mutableStateOf<Int>` → [state](https://developer.android.com/develop/ui/compose/state)
 - `@ReadOnlyComposable` / `@NonRestartableComposable` used deliberately on hot-path helpers → [strong skipping](https://developer.android.com/develop/ui/compose/performance/stability/strongskipping)
@@ -100,7 +100,7 @@ Deduct for:
 - frequent-state values passed to non-lambda modifiers when a layout/draw-phase alternative exists → [bestpractices](https://developer.android.com/develop/ui/compose/performance/bestpractices)
 - backwards writes — writing to state already read in the same composition body → [bestpractices](https://developer.android.com/develop/ui/compose/performance/bestpractices)
 - repeated broad recomposition smells across screens/components → [stability](https://developer.android.com/develop/ui/compose/performance/stability)
-- raw `List`/`Map`/`Set` parameters on widely reused composables when the rest of the codebase has the immutable-collections dependency available → [stability](https://developer.android.com/develop/ui/compose/performance/stability)
+- raw `List`/`Map`/`Set` parameters on widely reused composables when the rest of the codebase has the immutable-collections dependency available (Only deduct if Strong Skipping is OFF, or if the list instance is actively recreated and causing recomposition churn) → [stability](https://developer.android.com/develop/ui/compose/performance/stability)
 - `mutableStateOf<Int|Long|Float|Double>` where the typed factory exists (autoboxing) → [state](https://developer.android.com/develop/ui/compose/state)
 - `derivedStateOf { ... }` whose block does not actually read any `State` object (meaning it will never invalidate, and the overhead of `derivedStateOf` is wasted) → [side-effects](https://developer.android.com/develop/ui/compose/side-effects)
 - `@NonSkippableComposable` / `@DontMemoize` opt-outs without a justifying comment → [strong skipping](https://developer.android.com/develop/ui/compose/performance/stability/strongskipping)
@@ -128,6 +128,8 @@ Compiler reports generated in Step 4 give hard numbers. When present, apply thes
 
 Let `skippable%` = `skippableComposables / restartableComposables` from `*-module.json`.
 However, because zero-argument lambdas structurally cannot skip and artificially anchor this overall metric, you MUST also compute the **named-only `skippable%`** from `*-composables.csv` (by filtering out rows where `isLambda == "1"`). Use this **named-only percentage** for the ceiling conditions below, and state the distinction clearly in the report.
+
+*Note on Strong Skipping:* If Strong Skipping is enabled (default in Kotlin 2.0.20+), all restartable composables become skippable regardless of unstable parameters, and lambdas are automatically memoized. When Strong Skipping is active, **ignore the "unstable classes" conditions** in the table below—base the ceiling entirely on `skippable%` and qualitative checks (like whether those unstable instances are needlessly recreated).
 
 | Condition | Ceiling |
 |-----------|---------|
